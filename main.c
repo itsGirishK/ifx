@@ -59,7 +59,10 @@
 /*******************************************************************************
 * Global Variables
 *******************************************************************************/
-
+cy_stc_scb_ezi2c_context_t ezi2c_context;
+cyhal_ezi2c_t sEzI2C;
+cyhal_ezi2c_slave_cfg_t sEzI2C_sub_cfg;
+cyhal_ezi2c_cfg_t sEzI2C_cfg;
 uint8_t uart_read_value;
 cyhal_gpio_t GPIO_PIN;
 volatile bool capsense_scan_complete = false;
@@ -71,14 +74,37 @@ uint16_t duty_cycle=20;
 *******************************************************************************/
 
 static uint32_t initialize_capsense(void);
+static void initialize_capsense_tuner(void);
 static void process_touch(void);
 static void capsense_callback();
 static void capsense_isr(void);
+void handle_error(void);
 
 
 /*******************************************************************************
 * Function Definitions
 *******************************************************************************/
+/*******************************************************************************
+* Function Name: handle_error
+********************************************************************************
+* Summary:
+* User defined error handling function
+*
+* Parameters:
+*  void
+*
+* Return:
+*  void
+*
+*******************************************************************************/
+void handle_error(void)
+{
+    /* Disable all interrupts. */
+    __disable_irq();
+
+    CY_ASSERT(0);
+}
+
 
 /*******************************************************************************
 * Function Name: main
@@ -129,7 +155,7 @@ int main(void)
            /* Enable global interrupts */
             __enable_irq();
 
-
+            initialize_capsense_tuner();
 
             /*Intialize capsense*/
             result = initialize_capsense();
@@ -305,11 +331,7 @@ static void process_touch(void)
         printf("\r\n slider dutyCycle %d \r\n",duty_cycle);
     }
 
-//    /* Update the LED state if requested */
-//    if (led_update_req)
-//    {
-//        update_led_state(&led_data);
-//    }
+
 
     /* Update previous touch status */
     button0_status_prev = button0_status;
@@ -391,6 +413,37 @@ static void capsense_isr(void)
 void capsense_callback(cy_stc_active_scan_sns_t * ptrActiveScan)
 {
     capsense_scan_complete = true;
+}
+
+/*******************************************************************************
+* Function Name: initialize_capsense_tuner
+********************************************************************************
+* Summary:
+*  Initializes interface between Tuner GUI and PSoC 6 MCU.
+*
+*******************************************************************************/
+static void initialize_capsense_tuner(void)
+{
+    cy_rslt_t result;
+
+    /* Configure Capsense Tuner as EzI2C Slave */
+    sEzI2C_sub_cfg.buf = (uint8 *)&cy_capsense_tuner;
+    sEzI2C_sub_cfg.buf_rw_boundary = sizeof(cy_capsense_tuner);
+    sEzI2C_sub_cfg.buf_size = sizeof(cy_capsense_tuner);
+    sEzI2C_sub_cfg.slave_address = 8U;
+
+    sEzI2C_cfg.data_rate = CYHAL_EZI2C_DATA_RATE_400KHZ;
+    sEzI2C_cfg.enable_wake_from_sleep = false;
+    sEzI2C_cfg.slave1_cfg = sEzI2C_sub_cfg;
+    sEzI2C_cfg.sub_address_size = CYHAL_EZI2C_SUB_ADDR16_BITS;
+    sEzI2C_cfg.two_addresses = false;
+
+    result = cyhal_ezi2c_init(&sEzI2C, CYBSP_I2C_SDA, CYBSP_I2C_SCL, NULL, &sEzI2C_cfg);
+    if (result != CY_RSLT_SUCCESS)
+    {
+        handle_error();
+    }
+
 }
 
 
